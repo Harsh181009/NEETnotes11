@@ -1,2 +1,0 @@
-# NEETnotes11
-notes
