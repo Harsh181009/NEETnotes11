@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Final Verified Accurate Total Internal Reflection Simulator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        /* Basic styling for the page */
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #f0fof0; 
+            display: flex; 
+            flex-direction: column;
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            font-family: sans-serif; 
+            color: #333;
+        }
+        
+        /* Canvas styling */
+        #simCanvas { 
+            border: 1px solid #333; 
+            touch-action: none; 
+            /* Denser medium (bottom) to Rarer medium (top) */
+            background: linear-gradient(to bottom, #d0f4ff 50%, #f0f0f0 50%); 
+            margin-bottom: 20px;
+        }
+        
+        /* Control/Info box styling */
+        #controls { 
+            padding: 10px 15px; 
+            background: rgba(255, 255, 255, 0.9); 
+            border-radius: 8px; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
+            width: 90%; 
+            max-width: 480px;
+        }
+        
+        .info { 
+            font-size: 15px; 
+            margin-bottom: 8px; 
+        }
+        
+        #resultText {
+            display: inline-block;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+    </style>
+</head>
+<body>
+
+<canvas id="simCanvas"></canvas>
+
+<div id="controls">
+    <div class="info">Incident Angle (θi): <span id="angleValue" style="font-weight: bold;">0.0°</span></div>
+    <div class="info">Critical Angle (θc): <span id="criticalAngleValue" style="font-weight: bold;">48.0°</span></div>
+    <div class="info">Refracted Angle (θr): <span id="refractedAngleValue" style="font-weight: bold;">0.0°</span></div>
+    <div class="info">Status: <span id="resultText" style="font-weight: bold; background-color: #e6ffe6; color: green;">Refraction</span></div>
+    <hr style="border: none; border-top: 1px solid #ccc; margin: 10px 0;">
+    <div class="info" style="font-style: italic;">**Instruction:** Drag your finger/mouse horizontally across the screen to change the laser angle.</div>
+</div>
+
+<script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const angleValueSpan = document.getElementById('angleValue');
+    const criticalAngleValueSpan = document.getElementById('criticalAngleValue');
+    const refractedAngleValueSpan = document.getElementById('refractedAngleValue');
+    const resultTextSpan = document.getElementById('resultText');
+
+    // --- Physics Constants ---
+    const N1_DENSE = 1.3456; // Refractive index of the denser medium (e.g., glass)
+    const N2_RARE = 1.00;   // Refractive index of the rarer medium (e.g., air)
+    const EPSILON = 0.0001; // Small margin for critical angle comparison
+    
+    // Critical angle calculation
+    const CRITICAL_ANGLE_RAD = Math.asin(N2_RARE / N1_DENSE);
+    const CRITICAL_ANGLE_DEG = CRITICAL_ANGLE_RAD * (180 / Math.PI);
+    criticalAngleValueSpan.textContent = CRITICAL_ANGLE_DEG.toFixed(1) + '°';
+
+    // --- Simulation State and Dimensions ---
+    const CANVAS_WIDTH = 500;
+    const CANVAS_HEIGHT = 400;
+    const BOUNDARY_Y = CANVAS_HEIGHT / 2; 
+    
+    const LASER_ORIGIN_X = 0; 
+    const LASER_ORIGIN_Y = CANVAS_HEIGHT; 
+    
+    // Calculate the X-coordinate on the boundary for TIR (48.0 deg)
+    const DY_VERTICAL_DISTANCE = LASER_ORIGIN_Y - BOUNDARY_Y; // 200
+    const CRITICAL_X_OFFSET = DY_VERTICAL_DISTANCE / Math.tan(CRITICAL_ANGLE_RAD);
+    const CRITICAL_IMPACT_X = LASER_ORIGIN_X + CRITICAL_X_OFFSET; 
+    
+    let impactX = CRITICAL_IMPACT_X;
+    let isDragging = false;
+
+    // Set canvas dimensions
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+
+    // --- Drawing Functions ---
+
+    function draw() {
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        // 1. Draw Mediums and Boundary
+        ctx.fillStyle = 'rgba(100, 149, 237, 0.5)'; 
+        ctx.fillRect(0, BOUNDARY_Y, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
+        ctx.fillRect(0, 0, CANVAS_WIDTH, BOUNDARY_Y);
+
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, BOUNDARY_Y);
+        ctx.lineTo(CANVAS_WIDTH, BOUNDARY_Y);
+        ctx.stroke();
+
+        // 2. Calculate Incident Angle (θi)
+        const dx = impactX - LASER_ORIGIN_X;
+        const dy = BOUNDARY_Y - LASER_ORIGIN_Y; 
+        
+        const rayAngle = Math.atan2(dy, dx); // Angle relative to the positive X-axis
+        
+        // Incident Angle (θi) is the angle between the ray and the Normal (Vertical -PI/2)
+        const incidentAngleRad = Math.abs(rayAngle - (-Math.PI / 2));
+        const incidentAngleDeg = Math.min(incidentAngleRad * (180 / Math.PI), 90.0);
+        
+        angleValueSpan.textContent = incidentAngleDeg.toFixed(1) + '°';
+        refractedAngleValueSpan.textContent = '---'; 
+        
+        // 3. Draw Incident Ray
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(LASER_ORIGIN_X, LASER_ORIGIN_Y); 
+        ctx.lineTo(impactX, BOUNDARY_Y); 
+        ctx.stroke();
+        
+        // 4. Draw Normal Line (for reference)
+        ctx.strokeStyle = 'gray';
+        ctx.setLineDash([5, 5]); 
+        ctx.beginPath();
+        ctx.moveTo(impactX, BOUNDARY_Y - 70);
+        ctx.lineTo(impactX, BOUNDARY_Y + 70);
+        ctx.stroke();
+        ctx.setLineDash([]); 
+
+        // 5. Determine TIR or Refraction
+        const isTIR = incidentAngleRad > CRITICAL_ANGLE_RAD + EPSILON;
+        const isCritical = Math.abs(incidentAngleRad - CRITICAL_ANGLE_RAD) < EPSILON;
+
+        // Draw Reflected Ray (Always drawn, intensity changes based on status)
+        const reflectedAngle = -rayAngle; 
+        
+        if (isTIR) {
+            // --- TOTAL INTERNAL REFLECTION ---
+            resultTextSpan.textContent = 'TOTAL INTERNAL REFLECTION (TIR)';
+            resultTextSpan.style.color = 'white';
+            resultTextSpan.style.backgroundColor = 'red';
+            refractedAngleValueSpan.textContent = 'N/A';
+
+            // Draw FULL intensity reflection
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 3;
+            
+        } else {
+            // --- REFRACTION or CRITICAL ---
+            
+            // Set status text for non-TIR states
+            if (isCritical) {
+                resultTextSpan.textContent = 'CRITICAL ANGLE (θr = 90°)';
+                resultTextSpan.style.color = 'orange';
+                resultTextSpan.style.backgroundColor = 'yellow';
+                refractedAngleValueSpan.textContent = '90.0°';
+            } else {
+                resultTextSpan.textContent = 'Refraction';
+                resultTextSpan.style.color = 'green';
+                resultTextSpan.style.backgroundColor = '#e6ffe6';
+            }
+
+            // Draw PARTIAL reflection (dim)
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)'; 
+            ctx.lineWidth = 1;
+
+            // Refraction (Snell's Law)
+            const refractedAngleRad = Math.asin((N1_DENSE / N2_RARE) * Math.sin(incidentAngleRad));
+            refractedAngleValueSpan.textContent = (refractedAngleRad * (180 / Math.PI)).toFixed(1) + '°';
+
+            // Calculate refracted ray angle for drawing
+            let refractedRayAngle = -Math.PI / 2; 
+            
+            if (rayAngle < -Math.PI / 2) { 
+                 refractedRayAngle = -(Math.PI / 2) - refractedAngleRad;
+            } else { 
+                 refractedRayAngle = -(Math.PI / 2) + refractedAngleRad;
+            }
+            
+            // Draw Refracted Ray (Blue)
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(impactX, BOUNDARY_Y);
+            
+            if (isCritical) {
+                // If critical, draw exactly along the boundary
+                ctx.lineTo(CANVAS_WIDTH, BOUNDARY_Y); 
+            } else {
+                // Otherwise, draw the bent ray
+                ctx.lineTo(
+                    impactX + 300 * Math.cos(refractedRayAngle), 
+                    BOUNDARY_Y + 300 * Math.sin(refractedRayAngle) 
+                );
+            }
+            ctx.stroke();
+        }
+
+        // Draw Reflected Ray (Full or Partial)
+        ctx.beginPath();
+        ctx.moveTo(impactX, BOUNDARY_Y);
+        ctx.lineTo(
+            impactX + 300 * Math.cos(reflectedAngle), 
+            BOUNDARY_Y + 300 * Math.sin(reflectedAngle) 
+        );
+        ctx.stroke();
+        
+        
+        // 6. Draw Key Points
+        // Laser Source
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(LASER_ORIGIN_X, LASER_ORIGIN_Y, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Current Impact Point (Small dot that moves)
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(impactX, BOUNDARY_Y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mark the exact Critical Angle Point (Fixed yellow/black dot)
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(CRITICAL_IMPACT_X, BOUNDARY_Y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'yellow';
+        ctx.beginPath();
+        ctx.arc(CRITICAL_IMPACT_X, BOUNDARY_Y, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // --- User Interaction (Touch/Mouse) ---
+
+    function handleMove(clientX) {
+        const rect = canvas.getBoundingClientRect();
+        let x = clientX - rect.left;
+        
+        impactX = Math.min(Math.max(x, 0), CANVAS_WIDTH);
+        
+        draw();
+    }
+    
+    function startDrag(e) {
+        isDragging = true;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        handleMove(clientX);
+    }
+
+    function endDrag() {
+        isDragging = false;
+    }
+
+    function moveDrag(e) {
+        if (isDragging) {
+            e.preventDefault(); 
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            handleMove(clientX);
+        }
+    }
+    
+    // Attach Events
+    canvas.addEventListener('mousedown', startDrag);
+    canvas.addEventListener('touchstart', startDrag);
+
+    document.addEventListener('mouseup', endDrag);
+    document.addEventListener('touchend', endDrag);
+    document.addEventListener('touchcancel', endDrag); 
+
+    document.addEventListener('mousemove', moveDrag);
+    document.addEventListener('touchmove', moveDrag);
+
+    // Initial draw
+    draw(); 
+    
+</script>
+</body>
+</html>
